@@ -6,7 +6,7 @@ if __name__ == '__main__':
     kegg = agenspy.graph.Graph('kegg',
                                   replace=True,
                                   dbname='test')
-    graph= ig.Graph.Read_GraphML('graphs/kegg.graphml')
+    graph= ig.Graph.Read_GraphMLz('graphs/kegg.graphml.gz')
     print(len(graph.vs))
     print(len(graph.es))
     kegg.create_from_igraph(graph,

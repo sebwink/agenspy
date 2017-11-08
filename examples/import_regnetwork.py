@@ -9,7 +9,7 @@ if __name__ == '__main__':
     regnetwork = agenspy.graph.Graph('regnetwork_'+species,
                                         replace=True,
                                         dbname='test')
-    graph = ig.Graph.Read_GraphML('graphs/regnetwork_{}.graphml'.format(species))
+    graph = ig.Graph.Read_GraphMLz('graphs/regnetwork_{}.graphml.gz'.format(species))
     print(len(graph.vs))
     print(len(graph.es))
     regnetwork.create_from_igraph(graph,

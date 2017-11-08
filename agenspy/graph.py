@@ -1,22 +1,34 @@
 import re
 import getpass
+import functools
 
 import psycopg2
 
-import agensgraph.cursor
-import agensgraph.entity
+import agenspy.cursor
+import agenspy.types
 
 ################################################################################
 # Graph (class) ################################################################
 ################################################################################
 
-class Graph(agensgraph.cursor.Cursor):
+def graph_method(method):
+
+    @functools.wraps(method)
+    def _method(self, *args, **kwargs):
+        if not self.unique:
+            self.execute('SET graph_path={};'.format(self._name))
+        return method(self, *args, **kwargs)
+
+    return _method
+
+class Graph(agenspy.cursor.Cursor):
     '''
 
     '''
 
     def __init__(self,
                  graph_name,
+                 unique=True, # Good idea?
                  authorization=None,
                  cursor_name=None,
                  replace=False,
@@ -31,6 +43,7 @@ class Graph(agensgraph.cursor.Cursor):
             pass # TODO
         connection = psycopg2.connect(host=host, port=port, **kwargs)
         super().__init__(connection, cursor_name)
+        self.unique = unique
         self._name = graph_name
         authorization = kwargs.get('user', getpass.getuser()) if authorization is None else authorization
         if replace:
@@ -60,14 +73,17 @@ class Graph(agensgraph.cursor.Cursor):
     def graph_path(self, graph_name): pass
 
     @property
+    @graph_method
     def nv(self):
         return self.execute('MATCH (v) RETURN count(v);').fetchone()[0]
 
+    @graph_method
     def numv(self, label=None, prop={}, where=None):
         label = ':'+label if label else ''
         where = ' WHERE '+where if where else ''
         return self.execute('MATCH (v{} {}){} RETURN count(v);'.format(label, prop, where)).fetchone()[0]
 
+    @graph_method
     def xlabels(self, x):
         self.execute("SELECT labname FROM pg_catalog.ag_label WHERE graphid = {} AND labkind = '{}';"
                      .format(self.graphid, x))
@@ -77,9 +93,6 @@ class Graph(agensgraph.cursor.Cursor):
     def vlabels(self):
         return self.xlabels('v')
 
-    def create_nodetype(self, vtype):
-        pass
-
     @property
     def ne(self):
         return self.execute('MATCH ()-[e]->() RETURN count(e);').fetchone()[0]
@@ -87,9 +100,6 @@ class Graph(agensgraph.cursor.Cursor):
     @property
     def elabels(self):
         return self.xlabels('e')
-
-    def create_edgetype(self, etype):
-        pass
 
     def create_node(self, label=None, properties={}, **kwargs):
         '''
@@ -101,7 +111,7 @@ class Graph(agensgraph.cursor.Cursor):
 
         Returns:
 
-            GraphNode: a GraphNode instance corresponding to the created node
+            agenspy.types.GraphVertex: a agenspy.types.GraphVertex instance corresponding to the created node
 
         properties, **kwargs --> properties
 
@@ -119,21 +129,21 @@ class Graph(agensgraph.cursor.Cursor):
         cmd.append('RETURN id(v);')
         self.execute(' '.join(cmd))
         ID = self.fetchone()[0]
-        return GraphNode(ID, self)
+        return agenspy.types.GraphVertex(ID, self)
 
     def create_edge(self, source, relation=None, target=None, properties={}, **kwargs):
         '''
         Args:
 
-            source (GraphNode): source
+            source (agenspy.types.GraphVertex): source
             relation: list of str or str
-            target (GraphNode): target
+            target (agenspy.types.GraphVertex): target
             properties (dict): properties
             kwargs: additional properties as keyword arguments
 
         Returns:
 
-            GraphEdge: A GraphEdge instance corresponding to the created edge
+            agenspy.types.GraphEdge: A agenspy.types.GraphEdge instance corresponding to the created edge
 
         ------------------------------------------------------------------------
 
@@ -163,20 +173,20 @@ class Graph(agensgraph.cursor.Cursor):
         cmd.append('RETURN id(e);')
         self.execute(' '.join(cmd))
         ID = self.fetchone()[0]
-        return GraphEdge(ID, self, source.id, target.id)
+        return agenspy.types.GraphEdge(ID, self, source.id, target.id)
 
     def create_self_loop(self, node, relation=None, properties={}, **kwargs):
         '''
         Args:
 
-            node (GraphNode): node on which to create the loop
+            node (agenspy.types.GraphVertex): node on which to create the loop
             relation: list of str or str
             properties (dict): properties
             kwargs: additional properties as keyword arguments
 
         Returns:
 
-            GraphEdge: A GraphEdge instance corresponding to the created edge
+            agenspy.types.GraphEdge: A agenspy.types.GraphEdge instance corresponding to the created edge
 
         ------------------------------------------------------------------------
 
@@ -199,7 +209,7 @@ class Graph(agensgraph.cursor.Cursor):
         cmd.append('CREATE (v)-['+_relation+']->(v)')
         cmd.append('RETURN id(e);')
         ID = self.execute(' '.join(cmd)).fetchone()[0]
-        return GraphEdge(ID, self, node.id, node.id)
+        return agenspy.types.GraphEdge(ID, self, node.id, node.id)
 
     def match_nodes(self, labels, properties):
         pass
@@ -269,7 +279,7 @@ class Graph(agensgraph.cursor.Cursor):
         cmd.append(', '.join(ret))
         cmd[-1] += ';'
         self.execute(' '.join(cmd))
-        edges = [GraphEdge(ID=edge[0],
+        edges = [agenspy.types.GraphEdge(ID=edge[0],
                            graph=self,
                            sid=edge[1],
                            tid=edge[2],
@@ -283,10 +293,10 @@ class Graph(agensgraph.cursor.Cursor):
         cmd.append(', '.join(['id(v)', 'label(v)', 'properties(v)']))
         cmd[-1] += ';'
         self.execute(' '.join(cmd))
-        nodes = [GraphNode(ID=node[0],
-                           graph=self,
-                           label=node[1],
-                           properties=node[2])
+        nodes = [agenspy.types.GraphVertex(ID=node[0],
+                                           graph=self,
+                                           label=node[1],
+                                           properties=node[2])
                  for node in self.fetchall()]
         return Subgraph(nodes, edges, normalized=True)
 
@@ -499,153 +509,12 @@ class Graph(agensgraph.cursor.Cursor):
     def print_elabel_inheritance(self):
         self.print_xlabel_inheritance(x='e')
 
-################################################################################
-# GraphEntity (class) ##########################################################
-################################################################################
-
-class GraphEntity(dict):
-    def __init__(self, ID, graph, label=None, properties=None):
-        '''
-        A client should never instantiate a GraphEntity herself!
-        '''
-        super().__init__({} if properties is None else properties)
-        self._id = ID
-        self._graph = graph
-        self._label = label
-        #self._property_cache = {} if properties is None else properties
-
-
-    def __hash__(self):
-        return hash(self._id)
-
-    @property
-    def cached_keys(self):
-        return set(self.keys())
-
-    @property
-    def graph(self):
-        return self._graph
-
-    @property
-    def id(self):
-        return self._id
-
-    @property
-    def label(self):
-        return self.get_label()
-
-    def get_label(self, cache=False):
-        raise NotImplementedError
-
-    def properties(self, from_cache=True):
-        if from_cache:
-            return dict(self)
-        return self._properties()
-
-    def execute(self, cmd):
-        return self._graph.execute(cmd)
-
-    def fetchall(self):
-        return self._graph.fetchall()
-
-    def fetchone(self):
-        return self._graph.fetchone()
-
-################################################################################
-# GraphNode (class) ############################################################
-################################################################################
-
-class GraphNode(GraphEntity):
-
-    def _match(self, x):
-        return 'id({}) = CAST(\'{}\' as graphid)'.format(x, self._id)
-
-    @property
-    def _match_node_asv(self):
-        return 'MATCH (v) WHERE '+self._match('v')
-
-    def __getitem__(self, item):
-        if item in self:
-            return self[item]
-        # --- if not cached
-        cmd = [self._match_node_asv]
-        cmd.append('RETURN v->>\''+item+'\';')
-        self.execute(' '.join(cmd))
-        return self.fetchone()[0]
-
-    def get_label(self, cache=False):
-        if self._label is None:
-            cmd = [self._match_node_asv]
-            cmd.append('RETURN label(v);')
-            label = self.execute(' '.join(cmd)).fetchone()[0]
-            if cache:
-                self._label = label
-            return label
-        return self._label
-
-    def _properties(self):
-        pass # TODO
-
-    def neighbors(self, depth=1, incoming=True, outgoing=True):
-        pass
-
-    def neighborhood_graph(self, depth=1, incoming=True, outgoing=True):
-        pass
-
-################################################################################
-# GraphEdge (class) ############################################################
-################################################################################
-
-class GraphEdge(GraphEntity):
-
-    def __init__(self, ID, graph, sid, tid, label=None, properties=None):
-        super().__init__(ID, graph, label, properties)
-        self._sid = sid
-        self._tid = tid
-
-    def get_label(self, cache=False):
-        return self._label # TODO
-
-    def get_properties(self, cache=False):
-        pass # TODO
-
-    @property
-    def sid(self):
-        return self._sid
-
-    @property
-    def tid(self):
-        return self._tid
-
-    @property
-    def source(self):
-        return GraphNode(self._sid,
-                         self._graph,
-                         self._label,
-                         self._property_cache)
-
-    @property
-    def target(self):
-        return GraphNode(self._tid,
-                         self._graph,
-                         self._label,
-                         self._property_cache)
-
-################################################################################
-# Subgraph (class) #############################################################
-################################################################################
-
-class NodeSet(set):
-    pass
-
-class EdgeSet(set):
-    pass
 
 class Subgraph:
 
     def __init__(self, nodes, edges, normalized=None):
-        self.nodes = NodeSet(nodes)
-        self.edges = EdgeSet(edges)
+        self.nodes = set(nodes)
+        self.edges = set(edges)
         self._normalized = normalized
 
     @property
