@@ -1,4 +1,4 @@
 
-from agensgraph.cursor import Cursor
-from agensgraph.entity import Node, NodeType, Edge, EdgeType
-from agensgraph.graph import Graph
+from agenspy.cursor import Cursor
+from agenspy.entity import Node, NodeType, Edge, EdgeType
+from agenspy.graph import Graph
