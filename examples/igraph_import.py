@@ -1,9 +1,9 @@
 import igraph as ig
 
-import agensgraph.graph
+import agenspy.graph
 
 if __name__ == '__main__':
-    kegg = agensgraph.graph.Graph('kegg',
+    kegg = agenspy.graph.Graph('kegg',
                                   replace=True,
                                   dbname='test')
     graph= ig.Graph.Read_GraphML('graphs/kegg.graphml')

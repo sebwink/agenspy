@@ -2,11 +2,11 @@ import sys
 
 import igraph as ig
 
-import agensgraph.graph
+import agenspy.graph
 
 if __name__ == '__main__':
     species = sys.argv[1]
-    regnetwork = agensgraph.graph.Graph('regnetwork_'+species,
+    regnetwork = agenspy.graph.Graph('regnetwork_'+species,
                                         replace=True,
                                         dbname='test')
     graph = ig.Graph.Read_GraphML('graphs/regnetwork_{}.graphml'.format(species))

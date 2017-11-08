@@ -1,8 +1,8 @@
-import agensgraph 
+import agenspy 
 
 if __name__ == '__main__':
 
-    G = agensgraph.Graph('network',
+    G = agenspy.Graph('network',
                          replace=True,
                          dbname='test')
 

@@ -1,7 +1,7 @@
-import agensgraph
+import agenspy
 
 if __name__ == '__main__':
-    kegg = agensgraph.Graph('kegg', dbname='test')
+    kegg = agenspy.Graph('kegg', dbname='test')
     print('Number of nodes %s' % kegg.nv)
     print('Number of edges %s' % kegg.ne)
     kegg.execute("MATCH ({symbol: 'TP53'})-[:activation]->(t) RETURN t->>'symbol', t->>'ensembl'")

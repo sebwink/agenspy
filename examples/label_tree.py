@@ -1,8 +1,8 @@
-import agensgraph
+import agenspy
 
 if __name__ == '__main__':
 
-    G = agensgraph.Graph('label_tree',
+    G = agenspy.Graph('label_tree',
                          replace=True,
                          dbname='test')
 
