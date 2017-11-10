@@ -323,7 +323,9 @@ class Graph(agenspy.cursor.Cursor):
         pass
 
     def create_from_networkx(self, G):
+      # --------------------- #
         import networkx as nx
+      # --------------------- #
         pass
 
     def to_igraph(self,
@@ -369,7 +371,7 @@ class Graph(agenspy.cursor.Cursor):
       # ------------------- #
         import igraph as ig
       # ------------------- #
-        # TODO BATCH THIS
+        # TODO BATCH THIS SOMEHOW
 
         def strip_igraph_attributes(entities, tokens):
             regex = '|'.join(['('+token+')' for token in tokens])
@@ -421,14 +423,18 @@ class Graph(agenspy.cursor.Cursor):
         pass
 
     def create_from_networkit(self, G):
+      # ---------------------- #
         import networkit as nk
+      # ---------------------- #
         pass
 
     def to_graphtool(self, match=None, where=None):
         pass
 
     def create_from_graphtool(self, G):
+      # ----------------------- #
         import graph_tool as gt
+      # ----------------------- #
         pass
 
     def _parse_boolean_exprnmf(self, clause, inner, outer):
@@ -527,9 +533,51 @@ class Graph(agenspy.cursor.Cursor):
 class Subgraph:
 
     def __init__(self, nodes, edges, normalized=None):
-        self.nodes = list(set(nodes))
-        self.edges = list(set(edges))
+        self._nodes = list(set(nodes))
+        self._edges = list(set(edges))
         self._normalized = normalized   # True if all nodes are explicit, None if unknown
+
+    @property
+    def nodes(self):
+        return self._nodes
+
+    @property
+    def cached_node_property_keys(self):
+        return {key for node in self.nodes for key in node}
+
+    @property
+    def edges(self):
+        return self._edges
+
+    @property
+    def cached_edge_property_keys(self):
+        return {key for edge in self.edges for key in edge}
+
+    def add(entity):
+        if isinstance(entity, list):
+            for e in entity:
+                self.add_one(e)
+        else:
+            self.add_one(entity)
+
+    def add_one(entity):
+        if isinstance(entity, agenspy.GraphVertex):
+            self.add_vertex(entity)
+        elif isinstance(entity, agenspy.GraphEdge):
+            self.add_edge(entity)
+
+    def add_vertex(vertex):
+        if entity not in self.nodes:
+            self._nodes.append(entity)
+
+    def add_edge(edge):
+        if entity not in self.edges:
+            self._edges.append(entity)
+            # normalize
+            if entity.source not in self.nodes:
+                self._nodes.append(entity.source)
+            if entity.target not in self.nodes:
+                self._nodes.append(entity.target)
 
     @property
     def normalized(self):
@@ -548,6 +596,7 @@ class Subgraph:
         nodes |= {edge.source for edge in self.edges}
         nodes |= {edge.target for edge in self.edges}
         self.nodes = list(nodes)
+        self._normalized = True
 
     def __len__(self):
         return len(self.nodes)
@@ -565,9 +614,9 @@ class Subgraph:
         '''
 
         '''
-        # ----------------------------- #
+      # ------------------- #
         import igraph as ig
-        # ----------------------------- #
+      # ------------------- #
         # prepare
         if not self.normalized:
             self.normalize()
@@ -626,7 +675,7 @@ class Subgraph:
         # networkx graph
         G = nx.MultiDiGraph() if directed else nx.MultiGraph()
 
-        # ---
+        # ------
         return G
 
     def to_networkit(self,
@@ -642,17 +691,23 @@ class Subgraph:
         if not self.normalized:
             self.normalize()
         # networkit graph
-        weight_flag = False if edge_weight_attr is None or default_weight != 1.0 else True
+        weight_flag = False if edge_weight_attr is None and default_weight == 1.0 else True
         G = nk.graph.Graph(len(self.nodes), weight_flag, directed)
-        id2index = {node.id: index for index, node in enumerate(self.nodes)}
+        node2index = {node: index for index, node in enumerate(self.nodes)}
+        # weights
         if edge_weight_attr:
             weights = [edge.get(edge_weight_attr) for edge in self.edges]
             weights = [default_weight if w is None else w for w in weights]
-        else:
+        elif edge_weight_attr is None and default_weight != 1.0:
             weights = len(self.edges) * [default_weight]
-        for i, edge in enumerate(self.edges):
-            G.addEdge(id2index[edge.source.id], id2index[edge.target.id], weights[i])
-        # ---
+        # add edges
+        if weight_flag:
+            for i, edge in enumerate(self.edges):
+                G.addEdge(node2index[edge.source], node2index[edge.target], weights[i])
+        else:
+            for edge in self.edges:
+                G.addEdge(node2index[edge.source], node2index[edge.target])
+        # ------
         return G
 
     def to_graphtool(self):
@@ -664,5 +719,5 @@ class Subgraph:
         # graph_tool graph
         G = None
 
-        # ---
+        # ------
         return G

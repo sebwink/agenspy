@@ -6,7 +6,7 @@ interface to the AgensGraph DDL (Data Definition Language).
 
 More information on the DDL can be obtained here:
 
-    http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html
+    http://bitnine.net/wp-content/uploads/2017/06/html5/main.html#data-definition-language
 '''
 
 import functools
@@ -64,7 +64,8 @@ class Cursor(psycopg2.extensions.cursor):
         self.alter_vlabel = self.AlterXLabel(self, 'V')
         self.alter_elabel = self.AlterXLabel(self, 'E')
 
-    def _sql_string_list(self, l):
+    @classmethod
+    def _sql_string_list(cls, l):
         return '('+', '.join(l)+')'
 
     ############################################################################
@@ -100,8 +101,6 @@ class Cursor(psycopg2.extensions.cursor):
 
         Reading the property amounts to the query: SHOW graph_path;
         Setting the value to <name> corresponds to: SET graph_path = <name>;
-
-        (http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#graph)
         '''
         self.execute('SHOW graph_path;')
         return self.fetchone()[0]
@@ -124,8 +123,6 @@ class Cursor(psycopg2.extensions.cursor):
 
         CREATE GRAPH [ IF NOT EXISTS ] graph_name [AUTHORIZATION role_name];
 
-        (http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#graph-1)
-
         Args:
 
             name (str): name of the graph to be created
@@ -142,8 +139,6 @@ class Cursor(psycopg2.extensions.cursor):
     def _create_graph(cls, name, if_not_exists=False, authorization=None):
         '''
         CREATE GRAPH [ IF NOT EXISTS ] graph_name [AUTHORIZATION role_name];
-
-        http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#graph-1
         '''
         cmd = ['CREATE GRAPH']
         if if_not_exists:
@@ -166,8 +161,6 @@ class Cursor(psycopg2.extensions.cursor):
         > cursor.alter_graph(graph_name).rename(new_name)
 
         ALTER GRAPH graph_name RENAME TO new_name;
-
-        http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#graph-1
         '''
         return alter_graph_base+' RENAME TO '+new_name
 
@@ -179,8 +172,6 @@ class Cursor(psycopg2.extensions.cursor):
         > cursor.alter_graph(graph_name).owner_to(new_owner)
 
         ALTER GRAPH graph_name OWNER TO {new_owner | CURRENT_USER | SESSION_USER};
-
-        http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#graph-1
         '''
         return alter_graph_base+' OWNER TO '+new_owner
 
@@ -199,8 +190,6 @@ class Cursor(psycopg2.extensions.cursor):
         Chaning the owner of a graph called 'g' to 'user' can be achieved via:
 
         > cursor.alter_graph('g').owner_to('user')
-
-        http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#graph-1
         '''
         def __init__(self, cursor):
             self.cursor = cursor
@@ -212,14 +201,13 @@ class Cursor(psycopg2.extensions.cursor):
             '''
             Specify the graph to alter.
 
-            http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#graph-1
-
             Args:
 
                 name (str): name of an existing graph
 
             '''
             self._alter_graph_base = 'ALTER GRAPH '+name
+            return self
 
         def rename(self, new_name):
             '''
@@ -230,8 +218,6 @@ class Cursor(psycopg2.extensions.cursor):
             corresponds to:
 
                 ALTER GRAPH graph_name RENAME TO new_name;
-
-            http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#graph-1
 
             Args:
 
@@ -252,8 +238,6 @@ class Cursor(psycopg2.extensions.cursor):
             corresponds to:
 
                 ALTER GRAPH graph_name OWNER TO new_owner;
-
-            http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#graph-1
 
             Args:
 
@@ -277,12 +261,9 @@ class Cursor(psycopg2.extensions.cursor):
     def drop_graph(self, name, if_exists=False):
         '''
         Drop (delete) a graph.
-
-        Will also drop all object depending on the graph.
+        Will also drop all objects depending on the graph.
 
         DROP GRAPH [ IF EXISTS ] graph_name CASCADE;
-
-        (http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#graph-1)
 
         Args:
 
@@ -299,7 +280,6 @@ class Cursor(psycopg2.extensions.cursor):
     def _drop_graph(cls, name, if_exists=False):
         '''
         DROP GRAPH [ IF EXISTS ] graph_name CASCADE;
-        (http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#graph-1)
         '''
         cmd = ['DROP GRAPH']
         if if_exists:
@@ -330,8 +310,6 @@ class Cursor(psycopg2.extensions.cursor):
                [ INHERITS ( parent_label_name [, ...] ) ]
                [ WITH (storage_parameter)]
                [ TABLESPACE tablespace_name ]
-
-        http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#label
 
         Args:
 
@@ -395,8 +373,6 @@ class Cursor(psycopg2.extensions.cursor):
         See Cursor.drop_vlabel and Cursor.drop_elabel.
 
         DROP VLABEL [ IF EXISTS ] label_name [CASCADE]
-
-        http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#label
 
         Args:
 
@@ -546,8 +522,6 @@ class Cursor(psycopg2.extensions.cursor):
                [ WITH (storage_parameter)]
                [ TABLESPACE tablespace_name ]
 
-        http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#label
-
         Args:
 
             name (str): name of label
@@ -598,8 +572,6 @@ class Cursor(psycopg2.extensions.cursor):
 
         DROP VLABEL [ IF EXISTS ] label_name [CASCADE]
 
-        http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#label
-
         Args:
 
             name (str): name of an existing label
@@ -633,8 +605,6 @@ class Cursor(psycopg2.extensions.cursor):
                [ INHERITS ( parent_label_name [, ...] ) ]
                [ WITH (storage_parameter)]
                [ TABLESPACE tablespace_name ]
-
-        http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#label
 
         Args:
 
@@ -685,8 +655,6 @@ class Cursor(psycopg2.extensions.cursor):
         Drop an edge label.
 
         DROP ELABEL [ IF EXISTS ] label_name [CASCADE]
-
-        http://www.agensgraph.com/agensgraph-docs/agensgraph_DDL.html#label
 
         Args:
 

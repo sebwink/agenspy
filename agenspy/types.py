@@ -53,15 +53,6 @@ class GraphEntity(dict):
     def _properties(self):
         raise NotImplementedError
 
-    def _execute(self, cmd):
-        return self._graph.execute(cmd)
-
-    def _fetchall(self):
-        return self._graph.fetchall()
-
-    def _fetchone(self):
-        return self._graph.fetchone()
-
 ################################################################################
 # GraphNode (class) ############################################################
 ################################################################################
@@ -78,13 +69,13 @@ class GraphVertex(GraphEntity):
         # --- if not cached
         cmd = [self._match_node_asv]
         cmd.append('RETURN v->>\''+item+'\';')
-        return self._execute(' '.join(cmd)).fetchone()[0]
+        return self.graph.execute(' '.join(cmd)).fetchone()[0]
 
     def get_label(self, cache=False):
         if self._label is None:
             cmd = [self._match_node_asv]
             cmd.append('RETURN label(v);')
-            label = self._execute(' '.join(cmd)).fetchone()[0]
+            label = self.graph.execute(' '.join(cmd)).fetchone()[0]
             if cache:
                 self._label = label
             return label
@@ -118,7 +109,7 @@ class GraphEdge(GraphEntity):
         if self._label is None:
             cmd = [self._match_edge_ase]
             cmd.append('RETURN label(e);')
-            label = self._execute(' '.join(cmd)).fetchone()[0]
+            label = self.graph.execute(' '.join(cmd)).fetchone()[0]
             if cache:
                 self._label = label
             return label
@@ -129,15 +120,15 @@ class GraphEdge(GraphEntity):
             return dict(self)
         cmd = [self._match_edge_ase]
         cmd.append('RETURN properties(e);')
-        return self._execute(' '.join(cmd)).fetchone()[0]
+        return self.graph.execute(' '.join(cmd)).fetchone()[0]
 
     def get(self, attr):
-        if item in self:
+        if attr in self:
             return self[attr]
         # --- if not cached
         cmd = [self._match_edge_ase]
         cmd.append('RETURN e->>\''+attr+'\';')
-        return self._execute(' '.join(cmd)).fetchone()[0]
+        return self.graph.execute(' '.join(cmd)).fetchone()[0]
 
     @property
     def sid(self):
