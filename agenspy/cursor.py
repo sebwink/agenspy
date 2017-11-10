@@ -806,7 +806,7 @@ class Cursor(psycopg2.extensions.cursor):
             if where:
                 cmd.append('WHERE')
                 cmd.append(where)
-            return ' '.join(cmd)
+        return ' '.join(cmd)
 
 
     ############################################################################

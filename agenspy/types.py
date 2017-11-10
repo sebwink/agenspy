@@ -15,6 +15,9 @@ class GraphEntity(dict):
     def __hash__(self):
         return hash(self._id)
 
+    def _match(self, x):
+        return 'id({}) = CAST(\'{}\' as graphid)'.format(x, self._id)
+
     @property
     def cached_keys(self):
         return set(self.keys())
@@ -65,9 +68,6 @@ class GraphEntity(dict):
 
 class GraphVertex(GraphEntity):
 
-    def _match(self, x):
-        return 'id({}) = CAST(\'{}\' as graphid)'.format(x, self._id)
-
     @property
     def _match_node_asv(self):
         return 'MATCH (v) WHERE '+self._match('v')
@@ -110,11 +110,34 @@ class GraphEdge(GraphEntity):
         self._sid = sid
         self._tid = tid
 
+    @property
+    def _match_edge_ase(self):
+        return 'MATCH ()-[e]->() WHERE '+self._match('e')
+
     def get_label(self, cache=False):
-        return self._label # TODO
+        if self._label is None:
+            cmd = [self._match_edge_ase]
+            cmd.append('RETURN label(e);')
+            label = self._execute(' '.join(cmd)).fetchone()[0]
+            if cache:
+                self._label = label
+            return label
+        return self._label
 
     def get_properties(self, cache=False):
-        pass # TODO
+        if cache:
+            return dict(self)
+        cmd = [self._match_edge_ase]
+        cmd.append('RETURN properties(e);')
+        return self._execute(' '.join(cmd)).fetchone()[0]
+
+    def get(self, attr):
+        if item in self:
+            return self[attr]
+        # --- if not cached
+        cmd = [self._match_edge_ase]
+        cmd.append('RETURN e->>\''+attr+'\';')
+        return self._execute(' '.join(cmd)).fetchone()[0]
 
     @property
     def sid(self):
@@ -127,20 +150,16 @@ class GraphEdge(GraphEntity):
     @property
     def source(self):
         return GraphVertex(self._sid,
-                           self._graph,
-                           self._label,
-                           self._property_cache)
+                           self._graph)
 
     @property
     def target(self):
         return GraphVertex(self._tid,
-                           self._graph,
-                           self._label,
-                           self._property_cache)
+                           self._graph)
 
 
-class VertexList(set):
+class VertexList(list):
     pass
 
-class EdgeList(set):
+class EdgeList(list):
     pass

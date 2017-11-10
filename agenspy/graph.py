@@ -1,4 +1,5 @@
 import re
+import json
 import getpass
 import functools
 
@@ -67,7 +68,7 @@ class Graph(agenspy.cursor.Cursor):
 
     @property
     def graph_path(self):
-        self.execute('SHOW graph_path;').fetchone()[0]
+        return self.execute('SHOW graph_path;').fetchone()[0]
 
     @graph_path.setter
     def graph_path(self, graph_name): pass
@@ -101,6 +102,24 @@ class Graph(agenspy.cursor.Cursor):
     def elabels(self):
         return self.xlabels('e')
 
+    def create_nodes(self, n, labels=None, properties=None):
+        if labels:
+            labels = labels if isinstance(labels, list) else n*[labels]
+            assert n == len(labels), 'List of labels has to have n elemnts.'
+        if properties:
+            properties = properties if isinstance(properties, list) else n*[properties]
+            properties = [str(prob) for prob in properties]
+            assert n == len(properties), 'List of properties has to have n elements.'
+        if labels and properties:
+            argslist = [(label, prob) for label, prob in zip(labels, properties)]
+            psycopg2.extras.execute_batch('CREATE (:%s %s)', argslist)
+        elif not labels:
+            argslist = [(prob,) for prob in properties]
+            psycopg2.extras.execute_batch('CREATE (%s)', argslist)
+        elif not properties:
+            argslist = [(label,) for label in labels]
+            psycopg2.extras.execute_batch('CREATE (:%s)', argslist)
+
     def create_node(self, label=None, properties={}, **kwargs):
         '''
         Args:
@@ -129,7 +148,7 @@ class Graph(agenspy.cursor.Cursor):
         cmd.append('RETURN id(v);')
         self.execute(' '.join(cmd))
         ID = self.fetchone()[0]
-        return agenspy.types.GraphVertex(ID, self)
+        return agenspy.GraphVertex(ID, self)
 
     def create_edge(self, source, relation=None, target=None, properties={}, **kwargs):
         '''
@@ -230,10 +249,10 @@ class Graph(agenspy.cursor.Cursor):
     def subgraph(self,
                  source_label=None,
                  source_property_filter=None,
-                 source_properties=None,
+                 source_property_proj=None,
                  edge_label=None,
                  edge_property_filter=None,
-                 edge_properties=None,
+                 edge_property_proj=None,
                  target_label=None,
                  target_property_filter=None,
                  target_properties=None,
@@ -270,7 +289,7 @@ class Graph(agenspy.cursor.Cursor):
                 cmd.append(self._parse_disjnmf(where_clause))
         cmd.append('RETURN')
         ret = ['id(e)', 'id(s)', 'id(t)', 'type(e)']
-        if edge_properties is None:
+        if edge_property_proj is None:
             ret.append('properties(e)')
         else:
             #props = ['e->>'+p for p in edge_properties]
@@ -299,12 +318,6 @@ class Graph(agenspy.cursor.Cursor):
                                            properties=node[2])
                  for node in self.fetchall()]
         return Subgraph(nodes, edges, normalized=True)
-
-    def to_jsgn(self, match=None, where=None):
-        pass
-
-    def create_from_jsgn(self, G):
-        pass
 
     def to_networkx(self, match=None, where=None):
         pass
@@ -343,11 +356,12 @@ class Graph(agenspy.cursor.Cursor):
     def create_from_igraph(self, G,
                            node_label_attr=None,
                            node_label=None,
+                           unique_node_attr=None,
                            edge_label_attr=None,
                            edge_label=None,
-                           return_entities=True,
+                           return_subgraph=True,
                            strip_attrs=False,
-                           strip_tokens={' ', '/'},
+                           strip_tokens={' ', '/', '-'},
                            copy_graph=False):
         '''
 
@@ -394,8 +408,8 @@ class Graph(agenspy.cursor.Cursor):
                                       index2node[e.target],
                                       e.attributes())
                      for e in G.es]
-        if return_entities:
-            return nodes, edges
+        if return_subgraph:
+            return Subgraph(nodes, edges, normalized=True)
 
     @classmethod
     def from_igraph(cls, G, **kwargs):
@@ -513,17 +527,9 @@ class Graph(agenspy.cursor.Cursor):
 class Subgraph:
 
     def __init__(self, nodes, edges, normalized=None):
-        self.nodes = set(nodes)
-        self.edges = set(edges)
-        self._normalized = normalized
-
-    @property
-    def cached_node_property_keys(self):
-        return set().union(*[node.cached_keys for node in self.nodes])
-
-    @property
-    def cached_edge_property_keys(self):
-        return set().union(*[edge.cached_keys for edge in self.edges])
+        self.nodes = list(set(nodes))
+        self.edges = list(set(edges))
+        self._normalized = normalized   # True if all nodes are explicit, None if unknown
 
     @property
     def normalized(self):
@@ -533,10 +539,15 @@ class Subgraph:
 
     @property
     def is_normalized(self):
-        pass
+        return all(edge.source in self.nodes for edge in self.edges) and \
+               all(edge.target in self.nodes for edge in self.edges)
 
     def normalize(self):
-        pass
+        # TODO make sure nothing is reordered
+        nodes = set(self.nodes)
+        nodes |= {edge.source for edge in self.edges}
+        nodes |= {edge.target for edge in self.edges}
+        self.nodes = list(nodes)
 
     def __len__(self):
         return len(self.nodes)
@@ -560,50 +571,98 @@ class Subgraph:
         # prepare
         if not self.normalized:
             self.normalize()
-        nodes = list(self.nodes)
-        edges = list(self.edges)
         node_property_prefix = node_property_prefix+'_' if node_property_prefix else ''
         edge_property_prefix = edge_property_prefix+'_' if edge_property_prefix else ''
         # graph
         G = ig.Graph(directed=directed)
         # vertices
         G.add_vertices(len(self))
-        G.vs[node_label] = [node.label for node in nodes]
+        G.vs[node_label] = [node.label for node in self.nodes]
         if expand_node_properties:
             if cached_node_properties:
                 for prop in self.cached_node_property_keys:
-                    G.vs[node_property_prefix+prop] = [node.get(prop) for node in nodes]
+                    G.vs[node_property_prefix+prop] = [node.get(prop) for node in self.nodes]
             else:
                 pass
         else:
-            G.vs[node_property_prefix+'properties'] = [node.properties(cached_node_properties) for node in nodes]
+            G.vs[node_property_prefix+'properties'] = [node.properties(cached_node_properties) for node in self.nodes]
         # edges
-        id2index = {node.id: index for index, node in enumerate(nodes)}
-        G.add_edges([(id2index[e.sid], id2index[e.tid]) for e in edges])
-        G.es[edge_label] = [edge.label for edge in edges]
+        id2index = {node.id: index for index, node in enumerate(self.nodes)}
+        G.add_edges([(id2index[e.sid], id2index[e.tid]) for e in self.edges])
+        G.es[edge_label] = [edge.label for edge in self.edges]
         if expand_edge_properties:
             if cached_edge_properties:
                 for prop in self.cached_edge_property_keys:
-                    G.es[edge_property_prefix+prop] = [edge.get(prop) for edge in edges]
+                    G.es[edge_property_prefix+prop] = [edge.get(prop) for edge in self.edges]
             else:
                 pass
         else:
-            G.es[edge_property_prefix+'properties'] = [edge.properties(cached_edge_properties) for edge in edges]
+            G.es[edge_property_prefix+'properties'] = [edge.properties(cached_edge_properties) for edge in self.edges]
         # ------ 
         return G
 
-    def to_networkx(self, properties_from_cache=True):
+    def to_networkx(self,
+                    cached_node_properties=True,
+                    expand_node_properties=False,
+                    node_label='label',
+                    node_property_prefix=None,
+                    cached_edge_properties=True,
+                    expand_edge_properties=False,
+                    edge_label='label',
+                    edge_property_prefix=None,
+                    directed=True):
+        '''
+        '''
+      # --------------------- #
         import networkx as nx
-        pass
+      # --------------------- #
+        # prepare
+        if not self.normalized:
+            self.normalize()
+        nodes = list(self.nodes)
+        edges = list(self.edges)
+        node_property_prefix = node_property_prefix+'_' if node_property_prefix else ''
+        edge_property_prefix = edge_property_prefix+'_' if edge_property_prefix else ''
+        # networkx graph
+        G = nx.MultiDiGraph() if directed else nx.MultiGraph()
 
-    def to_networkit(self, properties_from_cache=True):
+        # ---
+        return G
+
+    def to_networkit(self,
+                     directed=True,
+                     edge_weight_attr=None,
+                     default_weight=1.0):
+        '''
+
+        '''
+      # ---------------------- #
         import networkit as nk
+      # ---------------------- #
+        if not self.normalized:
+            self.normalize()
+        # networkit graph
+        weight_flag = False if edge_weight_attr is None or default_weight != 1.0 else True
+        G = nk.graph.Graph(len(self.nodes), weight_flag, directed)
+        id2index = {node.id: index for index, node in enumerate(self.nodes)}
+        if edge_weight_attr:
+            weights = [edge.get(edge_weight_attr) for edge in self.edges]
+            weights = [default_weight if w is None else w for w in weights]
+        else:
+            weights = len(self.edges) * [default_weight]
+        for i, edge in enumerate(self.edges):
+            G.addEdge(id2index[edge.source.id], id2index[edge.target.id], weights[i])
+        # ---
+        return G
 
-    def to_graphtool(self, properties_from_cache=True):
+    def to_graphtool(self):
+      # ----------------------- #
         import graph_tool as gt
+      # ----------------------- #
+        if not self.normalized:
+            self.normalize()
+        # graph_tool graph
+        G = None
 
-    def to_jsgn(self, path=None, properties_from_cache=True):
-        pass
-
-    def to_graphml(self, path, properties_from_cache=True):
-        pass
+        # ---
+        return G

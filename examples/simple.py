@@ -23,7 +23,7 @@ if __name__ == '__main__':
 
     neelix = G.create_node('person', name='Neelix')
 
-    print(tom['name'], neelix['name'])
+    #print(tom['name'], neelix['name'])
 
     print(G.nv)
     print(G.vlabels)
