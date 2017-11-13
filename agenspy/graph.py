@@ -12,16 +12,6 @@ import agenspy.types
 # Graph (class) ################################################################
 ################################################################################
 
-def graph_method(method):
-
-    @functools.wraps(method)
-    def _method(self, *args, **kwargs):
-        if not self.unique:
-            self.execute('SET graph_path={};'.format(self._name))
-        return method(self, *args, **kwargs)
-
-    return _method
-
 class Graph(agenspy.cursor.Cursor):
     '''
 
@@ -29,7 +19,6 @@ class Graph(agenspy.cursor.Cursor):
 
     def __init__(self,
                  graph_name,
-                 unique=True, # Good idea?
                  authorization=None,
                  cursor_name=None,
                  replace=False,
@@ -44,7 +33,6 @@ class Graph(agenspy.cursor.Cursor):
             pass # TODO
         connection = psycopg2.connect(host=host, port=port, **kwargs)
         super().__init__(connection, cursor_name)
-        self.unique = unique
         self._name = graph_name
         authorization = kwargs.get('user', getpass.getuser()) if authorization is None else authorization
         if replace:
@@ -74,17 +62,14 @@ class Graph(agenspy.cursor.Cursor):
     def graph_path(self, graph_name): pass
 
     @property
-    @graph_method
     def nv(self):
         return self.execute('MATCH (v) RETURN count(v);').fetchone()[0]
 
-    @graph_method
     def numv(self, label=None, prop={}, where=None):
         label = ':'+label if label else ''
         where = ' WHERE '+where if where else ''
         return self.execute('MATCH (v{} {}){} RETURN count(v);'.format(label, prop, where)).fetchone()[0]
 
-    @graph_method
     def xlabels(self, x):
         self.execute("SELECT labname FROM pg_catalog.ag_label WHERE graphid = {} AND labkind = '{}';"
                      .format(self.graphid, x))
@@ -245,6 +230,13 @@ class Graph(agenspy.cursor.Cursor):
 
     def node_induced_subgraph(self, nodes):
         pass
+
+    def subgraph_query(self, query):
+        self.execute(query)
+        tuples = self.fetchall()
+        nodes = list({entity for t in tuples for entity in t if isinstance(entity, agenspy.GraphVertex)})
+        edges = list({entity for t in tuples for entity in t if isinstance(entity, agenspy.GraphEdge)})
+        return Subgraph(nodes, edges)
 
     def subgraph(self,
                  source_label=None,
@@ -591,11 +583,9 @@ class Subgraph:
                all(edge.target in self.nodes for edge in self.edges)
 
     def normalize(self):
-        # TODO make sure nothing is reordered
-        nodes = set(self.nodes)
-        nodes |= {edge.source for edge in self.edges}
+        nodes = {edge.source for edge in self.edges}
         nodes |= {edge.target for edge in self.edges}
-        self.nodes = list(nodes)
+        self._nodes.extend(list(set(self.nodes) - nodes))
         self._normalized = True
 
     def __len__(self):
@@ -693,7 +683,7 @@ class Subgraph:
         # networkit graph
         weight_flag = False if edge_weight_attr is None and default_weight == 1.0 else True
         G = nk.graph.Graph(len(self.nodes), weight_flag, directed)
-        node2index = {node: index for index, node in enumerate(self.nodes)}
+        nodeid2index = {node.id: index for index, node in enumerate(self.nodes)}
         # weights
         if edge_weight_attr:
             weights = [edge.get(edge_weight_attr) for edge in self.edges]
@@ -703,10 +693,10 @@ class Subgraph:
         # add edges
         if weight_flag:
             for i, edge in enumerate(self.edges):
-                G.addEdge(node2index[edge.source], node2index[edge.target], weights[i])
+                G.addEdge(nodeid2index[edge.sid], nodeid2index[edge.tid], weights[i])
         else:
             for edge in self.edges:
-                G.addEdge(node2index[edge.source], node2index[edge.target])
+                G.addEdge(nodeid2index[edge.sid], nodeid2index[edge.tid])
         # ------
         return G
 
