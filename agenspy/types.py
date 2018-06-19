@@ -127,8 +127,10 @@ class GraphEdge(GraphEntity):
             return self[attr]
         # --- if not cached
         cmd = [self._match_edge_ase]
-        cmd.append('RETURN e->>\''+attr+'\';')
-        return self.graph.execute(' '.join(cmd)).fetchone()[0]
+        #cmd.append('RETURN e->>\''+attr+'\';')
+        cmd.append('RETURN properties(e);')
+        #return self.graph.execute(' '.join(cmd)).fetchone()[0]
+        return self.graph.execute(' '.join(cmd)).fetchone()[0].get(attr)
 
     @property
     def sid(self):
