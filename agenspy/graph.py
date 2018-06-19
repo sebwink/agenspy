@@ -296,8 +296,8 @@ class Graph(agenspy.cursor.Cursor):
                            properties=edge[4])
                  for edge in self.fetchall()]
         node_ids = { edge.sid for edge in edges } | { edge.tid for edge in edges }
-        cmd = ['MATCH (v) WHERE id(v) in (']
-        cmd.append(', '.join(["(SELECT CAST('{}' AS graphid))".format(ID) for ID in node_ids]))
+        cmd = ['MATCH (v) WHERE (SELECT CAST(id(v) AS text)) in (']
+        cmd.append(','.join(["'{}'".format(ID) for ID in node_ids]))
         cmd.append(') RETURN')
         cmd.append(', '.join(['id(v)', 'label(v)', 'properties(v)']))
         cmd[-1] += ';'
