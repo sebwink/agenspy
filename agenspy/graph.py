@@ -168,9 +168,9 @@ class Graph(agenspy.cursor.Cursor):
         if properties:
             _relation += (' '+str(properties))
         cmd = ['MATCH (s),(t) WHERE']
-        cmd.append(source._match('s'))
+        cmd.append('('+source._match('s'))
         cmd.append('AND')
-        cmd.append(target._match('t'))
+        cmd.append(target._match('t')+')')
         cmd.append('CREATE (s)-['+_relation+']->(t)')
         cmd.append('RETURN id(e);')
         self.execute(' '.join(cmd))

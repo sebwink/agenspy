@@ -16,8 +16,7 @@ class GraphEntity(dict):
         return hash(self._id)
 
     def _match(self, x):
-        #return 'id({}) = CAST(\'{}\' as graphid)'.format(x, self._id)
-        return 'id({}) = {}'.format(x, self._id)
+        return 'id({}) = CAST(\'{}\' as graphid)'.format(x, self._id)
 
     @property
     def cached_keys(self):
