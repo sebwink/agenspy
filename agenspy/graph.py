@@ -1,7 +1,5 @@
-import re
-import json
 import getpass
-import functools
+import re
 
 import psycopg2
 
@@ -592,10 +590,12 @@ class Subgraph:
         return len(self.nodes)
 
     def to_igraph(self,
+                  node_properties=[],
                   cached_node_properties=True,
                   expand_node_properties=False,
                   node_label='label',
                   node_property_prefix=None,
+                  edge_properties=[],
                   cached_edge_properties=True,
                   expand_edge_properties=False,
                   edge_label='label',
@@ -711,3 +711,6 @@ class Subgraph:
 
         # ------
         return G
+
+    def graphtool_property(self, *args, **kwargs):
+        pass
